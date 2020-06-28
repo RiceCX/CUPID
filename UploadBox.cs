@@ -15,16 +15,19 @@ using System.Windows.Forms;
 namespace CUPID {
     public partial class UploadBox : Form {
         public ServerResponse Link;
+        public DatabaseCache dbc;
         public UploadBox() {
             InitializeComponent();
         }
 
         private void UploadBox_Load(object sender, EventArgs e) {
             FormBorderStyle = FormBorderStyle.FixedToolWindow;
+            dbc.updateTables(Link.url, Link.del_url, Link.thumb);
             URLText.Text = Link.url;
             PlaceLowerRight();
             TopMost = true;
         }
+
         private void PlaceLowerRight() {
             //Determine "rightmost" screen
             Screen rightmost = Screen.PrimaryScreen;

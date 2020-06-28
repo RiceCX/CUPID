@@ -4,36 +4,28 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace CUPID.Utilities {
-    /// <summary>
-    /// don't use this shit
-    /// </summary>
-    class GlobalKeyboardHookEventArgs : HandledEventArgs {
-        public GlobalKeyboardHook.KeyboardState KeyboardState { get; private set; }
-        public GlobalKeyboardHook.LowLevelKeyboardInputEvent KeyboardData { get; private set; }
+    class InterceptorEventArgs : HandledEventArgs {
+        public Interceptor.KeyboardState KeyboardState { get; private set; }
+        public Interceptor.LowLevelKeyboardInputEvent KeyboardData { get; private set; }
 
-        public GlobalKeyboardHookEventArgs(
-            GlobalKeyboardHook.LowLevelKeyboardInputEvent keyboardData,
-            GlobalKeyboardHook.KeyboardState keyboardState) {
+        public InterceptorEventArgs(
+            Interceptor.LowLevelKeyboardInputEvent keyboardData,
+            Interceptor.KeyboardState keyboardState) {
             KeyboardData = keyboardData;
             KeyboardState = keyboardState;
         }
     }
 
     //Based on https://gist.github.com/Stasonix
-    class GlobalKeyboardHook : IDisposable {
-        public event EventHandler<GlobalKeyboardHookEventArgs> KeyboardPressed;
+    class Interceptor : IDisposable {
+        public event EventHandler<InterceptorEventArgs> KeyboardPressed;
 
-        // EDT: Added an optional parameter (registeredKeys) that accepts keys to restict
-        // the logging mechanism.
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="registeredKeys">Keys that should trigger logging. Pass null for full logging.</param>
-        public GlobalKeyboardHook(Keys[] registeredKeys = null) {
-            RegisteredKeys = registeredKeys;
+        public Interceptor() {
             _windowsHookHandle = IntPtr.Zero;
             _user32LibraryHandle = IntPtr.Zero;
             _hookProc = LowLevelKeyboardProc; // we must keep alive _hookProc, because GC is not aware about SetWindowsHookEx behaviour.
@@ -78,7 +70,7 @@ namespace CUPID.Utilities {
             }
         }
 
-        ~GlobalKeyboardHook() {
+        ~Interceptor() {
             Dispose(false);
         }
 
@@ -139,12 +131,6 @@ namespace CUPID.Utilities {
             /// </summary>
             public int VirtualCode;
 
-            // EDT: added a conversion from VirtualCode to Keys.
-            /// <summary>
-            /// The VirtualCode converted to typeof(Keys) for higher usability.
-            /// </summary>
-            public Keys Key { get { return (Keys)VirtualCode; } }
-
             /// <summary>
             /// A hardware scan code for the key. 
             /// </summary>
@@ -176,8 +162,14 @@ namespace CUPID.Utilities {
             SysKeyUp = 0x0105
         }
 
-        // EDT: Replaced VkSnapshot(int) with RegisteredKeys(Keys[])
-        public static Keys[] RegisteredKeys;
+        public const int VkSnapshot = 0x2c;
+        public const int VkEscape = 0x1B;
+        public const int VkEnter = 0x0D;
+        //const int VkLwin = 0x5b;
+        //const int VkRwin = 0x5c;
+        //const int VkTab = 0x09;
+        //const int VkEscape = 0x18;
+        //const int VkControl = 0x11;
         const int KfAltdown = 0x2000;
         public const int LlkhfAltdown = (KfAltdown >> 8);
 
@@ -189,18 +181,12 @@ namespace CUPID.Utilities {
                 object o = Marshal.PtrToStructure(lParam, typeof(LowLevelKeyboardInputEvent));
                 LowLevelKeyboardInputEvent p = (LowLevelKeyboardInputEvent)o;
 
-                var eventArguments = new GlobalKeyboardHookEventArgs(p, (KeyboardState)wparamTyped);
+                var eventArguments = new InterceptorEventArgs(p, (KeyboardState)wparamTyped);
 
-                // EDT: Removed the comparison-logic from the usage-area so the user does not need to mess around with it.
-                // Either the incoming key has to be part of RegisteredKeys (see constructor on top) or RegisterdKeys
-                // has to be null for the event to get fired.
-                var key = (Keys)p.VirtualCode;
-                if (RegisteredKeys == null || RegisteredKeys.Contains(key)) {
-                    EventHandler<GlobalKeyboardHookEventArgs> handler = KeyboardPressed;
-                    handler?.Invoke(this, eventArguments);
+                EventHandler<InterceptorEventArgs> handler = KeyboardPressed;
+                handler?.Invoke(this, eventArguments);
 
-                    fEatKeyStroke = eventArguments.Handled;
-                }
+                fEatKeyStroke = eventArguments.Handled;
             }
 
             return fEatKeyStroke ? (IntPtr)1 : CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
